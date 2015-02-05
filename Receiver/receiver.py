@@ -77,6 +77,7 @@ class Sender:
 		time.sleep(self.wait_time)
 		if self.useFSO():
 			fso.reset()
+			time.sleep(self.wait_time)
 		v1 = self.sendMsg(msg,self.addr1)
 		if self.useFSO():
 			fso.switchLink()
@@ -106,6 +107,8 @@ class Sender:
 				continue
 			if self.v:
 				print 'Recv [' + data + '] from',from_addr
+			if data == 'unknown_msg':
+				raise Exception('Unknown message received')
 			break
 		return from_addr
 
@@ -198,7 +201,7 @@ def runLatencyTest(sender,msg_len,norm_wt,num_test,lat_wt,config_file,out_file):
 
 	sender.fso.gm.disconnectDevice()
 
-	lat_proc = subprocess.Popen(['../latency/latency','-tp',str(sender.test_port),'-w',str(lat_wt),,'-nt',str(num_test),'-ps',str(msg_len),'-out',out_file,'-config',config_file])
+	lat_proc = subprocess.Popen(['../latency/latency','-tp',str(sender.test_port),'-w',str(lat_wt),'-nt',str(num_test),'-ps',str(msg_len),'-out',out_file,'-config',config_file])
 
 	lat_proc.wait()
 
@@ -273,11 +276,11 @@ if __name__ == '__main__':
 	
 	
 	# Parameters for both tests
-	parser.add_argument('-lens','--msg_lens',metavar = 'LS',type = str,nargs = '+',default = ['msg_len.txt'],help = 'Values to use for message lengths')
+	parser.add_argument('-lens','--msg_lens',metavar = 'LS',type = str,nargs = '+',default = ['1'],help = 'Values to use for message lengths')
 	parser.add_argument('-norm','--norm_wait_time',metavar = 'N',type = str,nargs = '+',default = [None],help = 'Value to ad between messages for transmitter')
 	
 	# Throughput parameters
-	parser.add_argument('-fs','--freqs',metavar = 'FS',type = str,nargs = '+',default = ['freqs.txt'],help = 'Values to use for frequency')
+	parser.add_argument('-fs','--freqs',metavar = 'FS',type = str,nargs = '+',default = ['1'],help = 'Values to use for frequency')
 
 	# Latency parameters
 	parser.add_argument('-latency','--latency_test',action = 'store_true',help = 'If flag set then latency test will be run')
@@ -305,7 +308,7 @@ if __name__ == '__main__':
 	norm_wts = processParams(args.norm_wait_time)
 
 	latency = args.latency_test
-	lat_wt = args.lat_wt[0]
+	lat_wt = args.latency_wait_time[0]
 
 	if one_host:
 		fso = None
@@ -316,4 +319,3 @@ if __name__ == '__main__':
 		print 'Cannot run latency test with only one transmitter'
 	else:
 		main(fso,end_experiment,lp,fp,tp,to,wt,v,num_test,msg_lens,freqs,norm_wts,test_length,config_file,out_file,latency,lat_wt)
-
