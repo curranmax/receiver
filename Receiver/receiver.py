@@ -220,7 +220,7 @@ def runTest(sender,msg_len,freq,norm_wt,test_time,config_file,out_file):
 		info_str += ',angle=' + str(angle)
 
 	# Start receive
-	recv = subprocess.Popen(['./receiver','-port',str(sender.test_port),'-info',info_str,'-out',out_file,'-packet',str(msg_len),'-kb','-mb'])
+	recv = subprocess.Popen(['./receiver','-port',str(sender.test_port),'-info',info_str,'-out',out_file,'-packet',str(msg_len),'-kb','-mb','-gb'])
 	time.sleep(test_time)
 
 	# Stop througput test
