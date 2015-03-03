@@ -1,36 +1,51 @@
-from gm import GM
+
+# Allows for computers without GMs, to run code without installing GM library
+try:
+	from gm import GM
+
+	gm_supported = True
+except ImportError:
+	gm_supported = False
+
 from socket import *
 import time
 import subprocess
 import signal
 import argparse
 
-class WaitGM(GM):
-	def __init__(self,wait_time):
-		super(WaitGM,self).__init__()
-		self.wait_time = wait_time
+# In cases of no GM library, this won't be used
+try:
+	class WaitGM(GM):
+		def __init__(self,wait_time):
+			super(WaitGM,self).__init__()
+			self.wait_time = wait_time
 
-	def connectDevice(self):
-		time.sleep(self.wait_time)
-		super(WaitGM,self).connectDevice()
-		time.sleep(self.wait_time)
+		def connectDevice(self):
+			time.sleep(self.wait_time)
+			super(WaitGM,self).connectDevice()
+			time.sleep(self.wait_time)
 
-	def disconnectDevice(self):
-		time.sleep(self.wait_time)
-		super(WaitGM,self).disconnectDevice()
-		time.sleep(self.wait_time)
+		def disconnectDevice(self):
+			time.sleep(self.wait_time)
+			super(WaitGM,self).disconnectDevice()
+			time.sleep(self.wait_time)
 
-	def setValue(self,v):
-		time.sleep(self.wait_time)
-		rv = super(WaitGM,self).setValue(v)
-		time.sleep(self.wait_time)
-		return rv
+		def setValue(self,v):
+			time.sleep(self.wait_time)
+			rv = super(WaitGM,self).setValue(v)
+			time.sleep(self.wait_time)
+			return rv
 
-	def getValue(self):
-		time.sleep(self.wait_time)
-		rv = super(WaitGM,self).getValue()
-		time.sleep(self.wait_time)
-		return rv
+		def getValue(self):
+			time.sleep(self.wait_time)
+			rv = super(WaitGM,self).getValue()
+			time.sleep(self.wait_time)
+			return rv
+except NameError,e:
+	if gm_supported:
+		raise e
+	else:
+		pass
 
 class SimpleFSO:
 	def __init__(self,config_file,wait_time):
@@ -355,6 +370,10 @@ if __name__ == '__main__':
 
 	latency = args.latency_test
 	lat_wts = processParams(args.latency_wait_time) + map(lambda x:1/x,processParams(args.latency_frequency))
+
+	if not gm_supported and not one_host:
+		print 'This machine does not have the GM library installed'
+		one_host = True
 
 	if one_host:
 		fso = None
