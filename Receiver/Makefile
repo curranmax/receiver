@@ -1,5 +1,6 @@
 CC = g++
-FLAGS = -Wall
+FLAGS = -Wall -std=c++0x
+# -std=c++0x flag is required to use chrono library for timing
 
 all: clean receiver
 

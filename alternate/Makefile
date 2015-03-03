@@ -8,4 +8,4 @@ alternate: clean
 	$(CC) -o alternate main.cpp $(FLAGS)
 
 clean:
-	rm -rf *o align
+	rm -rf *o alternate

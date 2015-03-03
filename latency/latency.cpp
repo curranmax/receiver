@@ -119,7 +119,7 @@ int main(int argc, char const *argv[]) {
 	out.open(out_file.c_str(),std::ios::app);
 
 	// Print params
-	out << "packet_size=" << packet_size << ",wait_time=" << wait_time;
+	out << "packet_size=" << packet_size << ",wait_time=" << wait_time << ",language=C++";
 	// Print data
 	for(unsigned int i = 0; i < latency_vals.size(); ++i){
 		out << " " << latency_vals[i];

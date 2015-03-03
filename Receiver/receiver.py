@@ -5,13 +5,40 @@ import subprocess
 import signal
 import argparse
 
+class WaitGM(GM):
+	def __init__(self,wait_time):
+		super(WaitGM,self).__init__()
+		self.wait_time = wait_time
+
+	def connectDevice(self):
+		time.sleep(self.wait_time)
+		super(WaitGM,self).connectDevice()
+		time.sleep(self.wait_time)
+
+	def disconnectDevice(self):
+		time.sleep(self.wait_time)
+		super(WaitGM,self).disconnectDevice()
+		time.sleep(self.wait_time)
+
+	def setValue(self,v):
+		time.sleep(self.wait_time)
+		rv = super(WaitGM,self).setValue(v)
+		time.sleep(self.wait_time)
+		return rv
+
+	def getValue(self):
+		time.sleep(self.wait_time)
+		rv = super(WaitGM,self).getValue()
+		time.sleep(self.wait_time)
+		return rv
+
 class SimpleFSO:
-	def __init__(self,config_file):
+	def __init__(self,config_file,wait_time):
 		self.val1 = None
 		self.val2 = None
 		self.is_val1 = True
 		self.readConfig(config_file)
-		self.gm = GM()
+		self.gm = WaitGM(wait_time)
 		self.gm.connectDevice()
 		self.gm.setValue(self.val1)
 
@@ -61,27 +88,27 @@ class SimpleFSO:
 		self.is_val1 = not self.is_val1
 
 class Sender:
-	def __init__(self,fso,sock,foreign_port,test_port,verbose,wait_time):
+	def __init__(self,fso,sock,foreign_port,test_port,verbose):
 		self.fso = fso
 		self.sock = sock
 		self.foreign_port = foreign_port
 		self.test_port = test_port
 		self.v = verbose
-		self.wait_time = wait_time
 		# send init message to get both addresses
 		self.addr1 = None
 		self.addr2 = None
 		self.addr1,self.addr2 = self.sendBoth('init_message ' + str(test_port))
 
-	def sendBoth(self,msg):
-		time.sleep(self.wait_time)
+	def sendBoth(self,msg,msg2 = None):
 		if self.useFSO():
 			fso.reset()
-			time.sleep(self.wait_time)
 		v1 = self.sendMsg(msg,self.addr1)
 		if self.useFSO():
 			fso.switchLink()
-			v2 = self.sendMsg(msg,self.addr2)
+			if msg2 == None:
+				v2 = self.sendMsg(msg,self.addr2)
+			else:
+				v2 = self.sendMsg(msg2,self.addr2)
 			fso.switchLink()
 		else:
 			v2 = None
@@ -95,7 +122,6 @@ class Sender:
 			if n_timeout >= 2:
 				# self.tryWalk(to_addr)
 				n_timeout = 0
-			time.sleep(self.wait_time)
 			self.sock.sendto(msg,to_addr)
 			if self.v:
 				print 'Sent [' + msg + '] to',to_addr
@@ -170,11 +196,13 @@ def runTest(sender,msg_len,freq,norm_wt,test_time,config_file,out_file):
 		sender.fso.gm.disconnectDevice()
 		alt = subprocess.Popen(['../alternate/alternate','-input',config_file,'-f',str(freq)])
 
-	info_str = 'msglen_' + str(msg_len)
+	info_str = 'msglen=' + str(msg_len)
 	if sender.useFSO():
-		info_str += '_freq_' + str(freq)
+		info_str += ',freq=' + str(freq)
 	if norm_wt != None:
-		info_str += '_normwt_' + str(norm_wt)
+		info_str += ',normwt=' + str(norm_wt)
+	if angle >= 0:
+		info_str += ',angle=' + str(angle)
 
 	# Start receive
 	recv = subprocess.Popen(['./receiver','-port',str(sender.test_port),'-info',info_str,'-out',out_file,'-packet',str(msg_len),'-kb','-mb'])
@@ -193,15 +221,23 @@ def runTest(sender,msg_len,freq,norm_wt,test_time,config_file,out_file):
 	sender.sendBoth('end_test')
 
 def runLatencyTest(sender,msg_len,norm_wt,num_test,lat_wt,config_file,out_file):
-	start_test_msg = 'start_test msg_char=A msg_len=' + str(msg_len) + ' test=latency'
-	if norm_wt != None:
-		start_test_msg += ' norm_wt=' + str(norm_wt)
+	char1 = 'A'
+	char2 = 'B'
 
-	sender.sendBoth(start_test_msg)
+	start_test_msg1 = 'start_test msg_char=' + char1 + ' msg_len=' + str(msg_len) + ' test=latency'
+	if norm_wt != None:
+		start_test_msg1 += ' norm_wt=' + str(norm_wt)
+
+	start_test_msg2 = 'start_test msg_char=' + char2 + ' msg_len=' + str(msg_len) + ' test=latency'
+	if norm_wt != None:
+		start_test_msg2 += ' norm_wt=' + str(norm_wt)
+
+	sender.sendBoth(start_test_msg1,start_test_msg2)
 
 	sender.fso.gm.disconnectDevice()
 
-	lat_proc = subprocess.Popen(['../latency/latency','-tp',str(sender.test_port),'-w',str(lat_wt),'-nt',str(num_test),'-ps',str(msg_len),'-out',out_file,'-config',config_file])
+	# lat_proc = subprocess.Popen(['../latency/latency','-tp',str(sender.test_port),'-w',str(lat_wt),'-nt',str(num_test),'-ps',str(msg_len),'-out',out_file,'-config',config_file])
+	lat_proc = subprocess.Popen(['python','../latency/latency.py','-tp',str(sender.test_port),'-w',str(lat_wt),'-nt',str(num_test),'-ps',str(msg_len),'-a',str(angle),'-out',out_file,'-config',config_file])
 
 	lat_proc.wait()
 
@@ -209,13 +245,13 @@ def runLatencyTest(sender,msg_len,norm_wt,num_test,lat_wt,config_file,out_file):
 
 	sender.sendBoth('end_test')
 
-def main(fso,end_experiment,local_port,foreign_port,test_port,timeout,wait_time,verbose,num_test,msg_lens,freqs,norm_wts,test_time,config_file,out_file,latency,lat_wt):
+def main(fso,end_experiment,local_port,foreign_port,test_port,timeout,verbose,num_test,msg_lens,freqs,norm_wts,test_time,config_file,out_file,latency,lat_wts):
 	sock = socket(AF_INET,SOCK_DGRAM)
 	sock.bind(('',local_port))
 	sock.setsockopt(SOL_SOCKET,SO_BROADCAST,1)
 	sock.settimeout(timeout)
 
-	sender = Sender(fso,sock,foreign_port,test_port,verbose,wait_time)
+	sender = Sender(fso,sock,foreign_port,test_port,verbose)
 
 	if not sender.useFSO():
 		freqs = [1]
@@ -223,7 +259,8 @@ def main(fso,end_experiment,local_port,foreign_port,test_port,timeout,wait_time,
 	if latency:
 		for ml in msg_lens:
 			for n_wt in norm_wts:
-				runLatencyTest(sender,ml,n_wt,num_test,lat_wt,config_file,out_file)
+				for lat_wt in lat_wts:
+					runLatencyTest(sender,ml,n_wt,num_test,lat_wt,config_file,out_file)
 	else:
 		for ml in msg_lens:
 			for f in freqs:
@@ -255,6 +292,8 @@ def processParams(vs):
 			result.append(float(v))
 	return result
 
+angle = -1
+
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Runs the receiver end of the througput test')
 
@@ -284,9 +323,16 @@ if __name__ == '__main__':
 
 	# Latency parameters
 	parser.add_argument('-latency','--latency_test',action = 'store_true',help = 'If flag set then latency test will be run')
-	parser.add_argument('-lat_wt','--latency_wait_time',metavar = 'LWT',type = float,nargs = 1,default = [.1],help = 'Wait time parameter for latency test')
+	parser.add_argument('-lat_wt','--latency_wait_time',metavar = 'LWT',type = str,nargs = '+',default = [],help = 'Wait time parameter for latency test')
+	parser.add_argument('-lat_freq','--latency_frequency',metavar = 'LF',type = str,nargs = '+',default = [],help = 'Frequency for latency test')
+
+	# Global parameters
+	parser.add_argument('-a','--gm_angle',metavar = 'ANG',type = int,nargs = 1,default = [-1],help = 'Angle gm turns')
+	
 
 	args = parser.parse_args()
+
+	angle = args.gm_angle[0]
 
 	one_host = args.one_host
 	v = args.verbose
@@ -308,14 +354,17 @@ if __name__ == '__main__':
 	norm_wts = processParams(args.norm_wait_time)
 
 	latency = args.latency_test
-	lat_wt = args.latency_wait_time[0]
+	lat_wts = processParams(args.latency_wait_time) + map(lambda x:1/x,processParams(args.latency_frequency))
 
 	if one_host:
 		fso = None
 	else:
-		fso = SimpleFSO(config_file)
+		fso = SimpleFSO(config_file,wt)
+
+	if latency and len(lat_wts) == 0:
+		lat_wts = [.1]
 
 	if one_host and latency:
 		print 'Cannot run latency test with only one transmitter'
 	else:
-		main(fso,end_experiment,lp,fp,tp,to,wt,v,num_test,msg_lens,freqs,norm_wts,test_length,config_file,out_file,latency,lat_wt)
+		main(fso,end_experiment,lp,fp,tp,to,v,num_test,msg_lens,freqs,norm_wts,test_length,config_file,out_file,latency,lat_wts)

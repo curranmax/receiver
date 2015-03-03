@@ -1,20 +1,25 @@
 
 #include <iostream>
 #include <fstream>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <signal.h>
+
+#include <chrono>
+#include <ratio>
+#include <ctime>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
 #include "utils.h"
-time_t start_time,end_time;
+std::chrono::high_resolution_clock::time_point start_time,end_time;
 volatile sig_atomic_t stop_flag = 0;
 void signal_handler(int sig){
-	time(&end_time);
+	end_time = std::chrono::high_resolution_clock::now();
 	stop_flag = 1;
 }
 
@@ -82,7 +87,8 @@ int main(int argc,char **argv) {
 
 	signal(SIGINT,signal_handler);
 
-	time(&start_time);
+	start_time = std::chrono::high_resolution_clock::now();
+
 	// Receive loop
 	// Problem: Ctrl+C doesn't exit wait for receive
 	while(stop_flag == 0){
@@ -96,12 +102,14 @@ int main(int argc,char **argv) {
 	}
 	
 	// Calculate results
-	int seconds = difftime(end_time,start_time);
+	// int seconds = difftime(end_time,start_time);
+	std::chrono::duration<double> span = std::chrono::duration_cast<std::chrono::duration<double> >(end_time - start_time);
+	float seconds = span.count();
 	float packets_per_second = (float)number_of_packets/(float)seconds;
 	float bytes_per_second = (float)total_bytes / (float)seconds;
-	float kilobytes_per_second = bytes_per_second / 1024.0;
-	float megabytes_per_second = kilobytes_per_second / 1024.0;
-	float gigabytes_per_second = megabytes_per_second / 1024.0;
+	float kilobytes_per_second = bytes_per_second / 1000.0;
+	float megabytes_per_second = kilobytes_per_second / 1000.0;
+	float gigabytes_per_second = megabytes_per_second / 1000.0;
 
 	// Print results to command line
 	if(command_line_output){
@@ -135,25 +143,25 @@ int main(int argc,char **argv) {
 			out << packets_per_second << " packets/s\t";
 		}
 		if(out_b){
-			out << bytes_per_second << " b/s";
+			out << bytes_per_second << " bytes/s";
 			if(out_kb || out_mb || out_gb){
 				out << "\t";
 			}
 		}
 		if(out_kb){
-			out << kilobytes_per_second << " kb/s";
+			out << kilobytes_per_second << " KB/s";
 			if(out_mb || out_gb){
 				out << "\t";
 			}
 		}
 		if(out_mb){
-			out << megabytes_per_second << " mb/s";
+			out << megabytes_per_second << " MB/s";
 			if(out_gb){
 				out << "\t";
 			}
 		}
 		if(out_gb){
-			out << gigabytes_per_second << " gb/s";
+			out << gigabytes_per_second << " GB/s";
 		}
 		out << std::endl;
 		out.close();
