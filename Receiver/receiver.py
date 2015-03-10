@@ -8,6 +8,7 @@ except ImportError:
 	gm_supported = False
 
 from socket import *
+from datetime import datetime
 import time
 import subprocess
 import signal
@@ -201,17 +202,24 @@ class Sender:
 	def useFSO(self):
 		return self.fso != None
 
-def runTest(sender,msg_len,freq,norm_wt,test_time,config_file,out_file):
-	start_test_msg = 'start_test msg_char=A msg_len=' + str(msg_len) + ' test=throughput switch_freq=' + str(freq)
-	if norm_wt != None:
-		start_test_msg += ' norm_wt=' + str(norm_wt)
+def runTest(sender,msg_len,freq,norm_wt,test_time,continous,first_time,test_id,config_file,out_file):
+	if sender.v and test_id > 0:
+		print '\t\tStarting test:',test_id
+	if first_time or not continous:
+		start_test_msg = 'start_test msg_char=A msg_len=' + str(msg_len) + ' test=throughput switch_freq=' + str(freq)
+		if norm_wt != None:
+			start_test_msg += ' norm_wt=' + str(norm_wt)
 
-	sender.sendBoth(start_test_msg)
+		sender.sendBoth(start_test_msg)
+
 	if sender.useFSO():
 		sender.fso.gm.disconnectDevice()
 		alt = subprocess.Popen(['../alternate/alternate','-input',config_file,'-f',str(freq)])
 
 	info_str = 'msglen=' + str(msg_len)
+	info_str = ',start_time=' + ';'.join(str(datetime.now()).split())
+	if test_id > 0:
+		info_str += ',id=' + str(test_id)
 	if sender.useFSO():
 		info_str += ',freq=' + str(freq)
 	if norm_wt != None:
@@ -232,8 +240,8 @@ def runTest(sender,msg_len,freq,norm_wt,test_time,config_file,out_file):
 		alt.wait()
 
 		sender.fso.gm.connectDevice()
-
-	sender.sendBoth('end_test')
+	if not continous:
+		sender.sendBoth('end_test')
 
 def runLatencyTest(sender,msg_len,norm_wt,num_test,lat_wt,config_file,out_file):
 	char1 = 'A'
@@ -260,7 +268,7 @@ def runLatencyTest(sender,msg_len,norm_wt,num_test,lat_wt,config_file,out_file):
 
 	sender.sendBoth('end_test')
 
-def main(fso,end_experiment,local_port,foreign_port,test_port,timeout,verbose,num_test,msg_lens,freqs,norm_wts,test_time,config_file,out_file,latency,lat_wts):
+def main(fso,end_experiment,continous,test_id,local_port,foreign_port,test_port,timeout,verbose,num_test,msg_lens,freqs,norm_wts,test_time,config_file,out_file,latency,lat_wts):
 	sock = socket(AF_INET,SOCK_DGRAM)
 	sock.bind(('',local_port))
 	sock.setsockopt(SOL_SOCKET,SO_BROADCAST,1)
@@ -277,13 +285,19 @@ def main(fso,end_experiment,local_port,foreign_port,test_port,timeout,verbose,nu
 				for lat_wt in lat_wts:
 					runLatencyTest(sender,ml,n_wt,num_test,lat_wt,config_file,out_file)
 	else:
+		first_time = True
 		for ml in msg_lens:
 			for f in freqs:
 				for n_wt in norm_wts:
 					for i in range(num_test):
 						# Send messages to set up test
-						runTest(sender,ml,f,n_wt,test_time,config_file,out_file)
-	
+						runTest(sender,ml,f,n_wt,test_time,continous,first_time,test_id,config_file,out_file)
+						first_time = False
+						if test_id > 0:
+							test_id += 1
+	if continous:
+		sender.sendBoth('end_test')	
+
 	if end_experiment:
 		sender.sendBoth('end_experiment')
 	
@@ -328,6 +342,9 @@ if __name__ == '__main__':
 	parser.add_argument('-v','--verbose',action = 'store_true',help = 'Use to specify verbose mode')
 	parser.add_argument('-end','--end_experiment',action = 'store_true',help = 'If set then code on transmitters will end')
 	
+	parser.add_argument('-c','--continous',action = 'store_true',help = 'If set then no messages will be sent between tests')
+	parser.add_argument('-id','--test_id',metavar = 'ID',type = int,nargs = 1,default = [-1],help = 'Id to assign first test, rest will be incremented')
+	
 	
 	# Parameters for both tests
 	parser.add_argument('-lens','--msg_lens',metavar = 'LS',type = str,nargs = '+',default = ['1'],help = 'Values to use for message lengths')
@@ -352,6 +369,9 @@ if __name__ == '__main__':
 	one_host = args.one_host
 	v = args.verbose
 	end_experiment = args.end_experiment
+	continous = args.continous
+
+	test_id = args.test_id[0]
 
 	lp = args.local_port[0]
 	fp = args.foreign_port[0]
@@ -367,6 +387,9 @@ if __name__ == '__main__':
 	msg_lens = map(lambda x:2**int(x),processParams(args.msg_lens))
 	freqs = map(lambda x:1/x,processParams(args.freqs))
 	norm_wts = processParams(args.norm_wait_time)
+
+	if continous and (len(msg_lens) != 1 or len(freqs) != 1 or len(norm_wts) != 1):
+		raise Exception('Tests cannot be continous if different parameters are specified to be tested!')
 
 	latency = args.latency_test
 	lat_wts = processParams(args.latency_wait_time) + map(lambda x:1/x,processParams(args.latency_frequency))
@@ -386,4 +409,4 @@ if __name__ == '__main__':
 	if one_host and latency:
 		print 'Cannot run latency test with only one transmitter'
 	else:
-		main(fso,end_experiment,lp,fp,tp,to,v,num_test,msg_lens,freqs,norm_wts,test_length,config_file,out_file,latency,lat_wts)
+		main(fso,end_experiment,continous,test_id,lp,fp,tp,to,v,num_test,msg_lens,freqs,norm_wts,test_length,config_file,out_file,latency,lat_wts)
